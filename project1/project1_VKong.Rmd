@@ -1,0 +1,72 @@
+---
+title: "Data 612 Project 1"
+output: html_document
+---
+# This system recommends the chain restaurants on the Old Country Road to customers.
+```{r}
+# Toy Data set
+row_name <- c("A","B","C","D","E")
+col_name<-c("Outback Steakhouse","Applebee's","Olive Garden","Red Lobster", "Cheesecake Factory")
+m <- matrix(c(4,3,NA,5,4,3,1,2,2,3,NA,2,NA,4,3,3,NA,3,4,NA,2,4,1,NA,4),nrow=5,byrow=TRUE, dimnames = list(row_name,col_name))
+m
+
+# Split training and testing matrix, and replace the value from test set into "NA"
+training <- c(4,3,NA,NA,4,NA,1,2,NA,3,NA,2,NA,4,3,3,NA,NA,4,NA,2,4,1,NA,NA)
+training_m <- matrix(c(4,3,NA,NA,4,NA,1,2,NA,3,NA,2,NA,4,3,3,NA,NA,4,NA,2,4,1,NA,NA),nrow=5,byrow=TRUE, dimnames = list(row_name,col_name))
+testing_m <-c(5,3,2,3,4)
+
+# raw average
+raw_average <- mean(training,na.rm=TRUE)
+raw_average
+rmse_training <- sqrt(mean((training-raw_average)^2,na.rm = TRUE))
+rmse_training
+
+rmse_testing <- sqrt(mean((testing_m-raw_average)^2))
+rmse_testing
+
+
+# Find bias
+training_m
+user_mean <- rowMeans(training_m,na.rm=TRUE)
+user_mean
+user_bias <- user_mean-raw_average
+user_bias
+
+food_mean <- colMeans(training_m,na.rm=TRUE)
+food_mean
+food_bias <- food_mean - raw_average
+food_bias
+
+# baseline predictor
+
+user_bias_matrix<-matrix(c(user_bias[1],user_bias[1],user_bias[1],user_bias[1],user_bias[1],user_bias[2],user_bias[2],user_bias[2],user_bias[2],user_bias[2],user_bias[3],user_bias[3],user_bias[3],user_bias[3],user_bias[3],user_bias[4],user_bias[4],user_bias[4],user_bias[4],user_bias[4],user_bias[5],user_bias[5],user_bias[5],user_bias[5],user_bias[5]),nrow=5,byrow = TRUE)
+
+user_bias_matrix
+
+food_bias_matrix <-matrix(c(food_bias[1],food_bias[1],food_bias[1],food_bias[1],food_bias[1],food_bias[2],food_bias[2],food_bias[2],food_bias[2],food_bias[2],food_bias[3],food_bias[3],food_bias[3],food_bias[3],food_bias[3],food_bias[4],food_bias[4],food_bias[4],food_bias[4],food_bias[4],food_bias[5],food_bias[5],food_bias[5],food_bias[5],food_bias[5]),nrow=5)
+
+food_bias_matrix
+
+m[is.na(m)]<-0
+baseline_predictor <- m+user_bias_matrix+food_bias_matrix
+baseline_predictor
+# rmse for test and train
+baseline_predictor[baseline_predictor<0] <-0
+baseline_predictor[baseline_predictor>5]<- 5
+baseline_predictor
+average_bp <- mean(baseline_predictor)
+rmse_bp <- sqrt(mean((baseline_predictor-average_bp)^2))
+rmse_bp
+
+rmse_bp_test <- sqrt((0+(3-2.2857)^2+(2-2.2857)^2+(3-2.2857)^2+(4-3.952581)^2)/5)
+rmse_bp_test
+
+# percent of improvement for test and train
+percent_improvement_test <- (1-rmse_bp_test/rmse_testing)*100
+percent_improvement_test
+
+percent_improvement_training <- (1-rmse_bp/rmse_training)*100
+percent_improvement_training
+
+```
+The percent of improvement for test is better which is 59%. However, the percent of improvement for the training is worse which is -74%. It means that after I did the baseline predictor, it does not improve my user-item matrix. Here are the reasons the I guess. The set is a toyset which means I made them up so there are bias in the data set. Second of all, I think when I construct this data set, I put many NA values there. They exist in the reality but for a 5 by 5 matrix, it maybe too many of them. 
