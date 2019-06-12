@@ -1,0 +1,17 @@
+---
+title: "Discussion 1"
+author: "Vivian Kong"
+date: "6/11/2019"
+output: html_document
+---
+
+# Commercial recommender. Does the technique deliver a good experience or are the recommendations off-target.
+As many other millennials, I like shopping online and actually heavily rely on Amazon Prime for my daily life. 
+I think they are using Hybrid filtering. I can tell that they are using Item-based collaborative filtering. If I browse any products 
+in Amazon's website recently, the ads with similar stuff will keep showing in my Instagram account. It will keep remind me that I haven't bought this item yet and I should get it. Also, for the books, If I follow any famous people in Amazon, it will show me the book list that they recommend in Amazon and again reminding me to purchase them. Also for Conten-based filtering, it will track my orders and recommend me the similar product. 
+
+I think that most of time it deliver a good experience. Our life is pretty hectic and maybe we need something but we just put them in the shopping cart but never pay for it. It is good that Amazon will keep the order and remind people to purchase them. However, it sometimes can be annoying since it keeps popping up in the homepage of social medias. It may invade some privacy.
+
+# Handle attacks on recommender systems
+From the reading, it makes me realize that the rating system may be not that perfect all the time. Last year, there was a Chinese movie which was extremly popular and the rating of it was really high. After I watched the movie, I had to admit that it is a good movie but it is not that crazy excellent as the rating mentioned. Very soon, the news came out. The film company hired a huge amount of fake users and gave fake high ratings and reviews for the movie. 
+In my opinion, there is no sigle strategy is perfect. However, as what Amazon did, if the recommender system can use the hybrid algorithms, it will defend the attack more efficiently. Also, monitoring the recommender system is very important. Like IMDb, they should come up with the algorithms to warn the "dangerous" ratings or a flood of bad/good ratings during a certain period of time, and they may need to be filtered out. Or, they can also encourage users to do the job. Give users options to report suspicious ratings or reviews. 
