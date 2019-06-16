@@ -1,0 +1,160 @@
+---
+title: "Project2 Data 612"
+author: "Vivian Kong"
+date: "6/12/2019"
+output: html_document
+---
+
+By textbook, the collaborative filtering algorithms are based on measuring the similarity between users of between items. 
+In the "recommenderlab", I use Jester5k, the joke rating matrix for this project. To compute similarities, in this case, I followed the example 
+from the textbook by comparing cosine and pearson. 
+```{r, message=FALSE}
+library("recommenderlab")
+library("ggplot2")
+
+
+data(Jester5k)
+Jester5k
+methods(class= class(Jester5k))
+
+# Computing the similarity matrix
+# similarity users
+similarity_users <- similarity(Jester5k[1:5, ], method="cosine", which = "users")
+as.matrix(similarity_users)
+# The more red the cell is, the more similar two users are. 
+image(as.matrix(similarity_users), main="Use cosine for similarity")
+
+similarity_users <- similarity(Jester5k[1:5, ], method="pearson", which = "users")
+as.matrix(similarity_users)
+# The more red the cell is, the more similar two users are. 
+image(as.matrix(similarity_users), main="Use pearson for similarity")
+```
+To compute the similarities between users, I used both ways, cosine and pearson. By quora, "https://www.quora.com/In-what-scenario-is-using-Pearson-correlation-better-than-Cosine-similarity", I found the difference between cosine and pearson. When users tend to have very differing sets of items, pearson would perform worse. As we can see from the heat map, cosine one seems to show more relations between different users. The more red cell is, the more similar two users are. 
+
+```{r}
+# similarity items
+
+similarity_items <- similarity(Jester5k[ ,1:5], method = "cosine", which = "items")
+as.matrix(similarity_items)
+image(as.matrix(similarity_items),main="cosine for Item similarity")
+
+
+similarity_items <- similarity(Jester5k[ ,1:5], method = "pearson", which = "items")
+as.matrix(similarity_items)
+image(as.matrix(similarity_items),main="pearson for Item similarity")
+```
+
+I used the same method from comparing users' similarities to compare the similarities of items. I think cosine seems better again in this case. 
+
+
+
+
+```{r}
+# The histogram for the data
+
+hist(getRatings(Jester5k),main="Distribution of ratings")
+
+best <- which.max(colMeans(Jester5k))
+cat(JesterJokes[best])
+
+
+
+
+
+
+# Exploring the average ratings
+
+average_ratings <- colMeans(Jester5k)
+qplot(average_ratings) + stat_bin(binwidth = 0.1) +
+   ggtitle("Distribution of the average joke rating")
+
+
+```
+The highest value is around 1, and there is no joke rate for 10 averagely or -10. Since this matrix is only for 5k and there is no missing values because missing values count as 99 which does not appear in this data set so we do not have to worry about the ratings are biased because of the missing values.
+
+Item-based collaborative filtering. By textbook, the core algorithm is based on these steps
+1. For each two items, measure how similar they are in terms of having received similar ratings by similar users.
+2. For each item, idenitfy the k-most similar items
+3. For each user, identify the items that are most similar to the user's purchases
+
+building IBCF model
+1.Training set and Test set
+2.Applying the recommender model on the test set. I will use the model to recommend jokes to the users in the test set and specify 5 jokes to recommend to users.
+
+
+
+```{r}
+ratings_jokes <- Jester5k[rowCounts(Jester5k) > 50,
+   colCounts(Jester5k) > 100]
+# set the probability in the training set as 80%
+which_train <- sample(x = c(TRUE, FALSE), size = nrow(ratings_jokes),
+   replace = TRUE, prob = c(0.8, 0.2))
+head(which_train)
+# split training and testing set
+train <- ratings_jokes[which_train,]
+test <- ratings_jokes[!which_train,]
+
+#Remommendation models IBCF
+recommender_models <- recommenderRegistry$get_entries(dataType ="realRatingMatrix")
+names(recommender_models)
+lapply(recommender_models, "[[", "description")
+recommender_models$IBCF_realRatingMatrix$parameters
+
+#Build IBCF Model, model_details$sim is similarity matrix
+
+IBCF_model <- Recommender(data = train, method= "IBCF", parameter = list (k =30))
+IBCF_model
+model_detail <- getModel(IBCF_model)
+dim(model_detail$sim)
+col_sums <- colSums(model_detail$sim > 0)
+qplot(col_sums) + stat_bin(binwidth = 1) + ggtitle("Distribution of
+   the column count")
+# In this section, we can find which are the jokes with the most elements. 
+which_max <- order(col_sums, decreasing = TRUE)[1:6]
+rownames(model_detail$sim)[which_max]
+```
+
+Applying the recommender model on the test set. (By textbook)
+1. Extract the user rating of each purchase associated with this item. The rating is used as as a weight.
+2. Extract the similarity of the item with each purchase associated with this item
+3. Multiply each weight with the related similarity
+4. Sum everything up. 
+```{r}
+n_recommended <- 5
+predict_model <- predict(object = IBCF_model, newdata = test, n = n_recommended)
+predict_model
+class(predict_model)
+slotNames(predict_model)
+# Example for the first user, recommendations
+recc_user_1 <- predict_model@items[[1]]
+jokes_user_1 <- predict_model@itemLabels[recc_user_1]
+jokes_user_1
+
+```
+
+IBCF bases on the similarity matrix. The model stors the 30-most (default number) similar. It will work very will with lots of data and big rating matrices. 
+
+3. Building the UBCF model (User based collaborative filtering) By textbook
+Identify which items are similar in terms of having been purchased by the same people
+Recommend to a new user the items that are similar to its purchase.
+1). Measue how similar each user is to the new one. 
+2). Identify the most similar users. 
+3). Rate the items purchased by the most similar users. The rating is the average rating among similar users
+4). Pick the top-rated items. 
+
+```{r}
+recommender_models <- recommenderRegistry$get_entries(dataType =
+   "realRatingMatrix")
+recommender_models$UBCF_realRatingMatrix$parameters
+UBCF_model <- Recommender(data = train, method = "UBCF")
+UBCF_model
+model_details <- getModel(UBCF_model)
+names(model_details)
+recc_predicted <- predict(object = UBCF_model,
+   newdata = test, n = n_recommended)
+recc_predicted
+recc_user_1 <- recc_predicted@items[[1]]
+jokes_user_1 <- recc_predicted@itemLabels[recc_user_1]
+jokes_user_1
+```
+Compare different models with the recommendations for the first user, only "Joke80" is in both models. According to the textbook, UBCF has to keep the entire database, it does not work good with bigger dataset but its accuracy is slightly better than IBCF. 
