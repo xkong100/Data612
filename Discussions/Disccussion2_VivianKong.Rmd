@@ -1,0 +1,12 @@
+---
+title: "Data 612 Discussion 2"
+author: "Vivian Kong"
+date: "6/18/2019"
+output: html_document
+---
+
+# Discussion 2
+
+In the presentation, the presenter is working for Spotify. I use Spotify daily and I always like when they recommend me some music when I need some new music. The first half of the presentation he mentioned about matrix facctorization. I think it is pretty important and interesting. It may be one of the most popular ways to characterizes both items and users by vectors of factors. So I did the research about the matrix factorization form and started to get better understanding about the topic but when he showed them in the presentation, I was lost. For the basic matrix factorization model. We call Pu is extent of interest the user has in items. so qi^T dot product of Pu will be the interaction between user and item. So the matrix factorization form minimize the interaction by using stochastic gradient descent and alternating least squares. For these two, I think I need to do research and hopefully I will get better understanding on it. 
+
+Also, he mentioned 3 different attempts to optimize the whole calculations. First attempt, he useds broadcast everything which involves a lot of unnecessarily shuffling and also time and space consuming. Second attempt, he did the full gridify gridify. Good thing about it is that ratings never shuffled and requires less memory. Third attempt is the half gridify. It is probably the best of three methods so far. Although I did not grasp the idea behind it during the presentation, I think it is important that optimizing the algorithm of the recommender system is really important. 
