@@ -1,0 +1,85 @@
+---
+title: "Project 3"
+author: "Vivian Kong"
+date: "6/21/2019"
+output: html_document
+---
+
+Project 3. 
+I would like to use the Jester5k to try out SVD method for this project. For the missing values, I will use "0" to replace. 
+
+```{r,message=FALSE}
+library(recommenderlab)
+library(MASS)
+library(dplyr)
+data(Jester5k)
+table<-Jester5k@data[1:6,1:5]
+m <- as.matrix(table)
+m
+
+s <- svd(m)
+D <- diag(s$d)
+s$u
+D
+v <- s$v
+v
+
+```
+u matrix is the user-to concept similarity.D is strenght of concepts. In our case, D55 is the smallest value which we can set to 0 later. v is "item to concept" similarity matrix. For example v11 and v12 are corresponding to the original matrix m the m11 and m12. 
+Now let's predict if user 7-10 which are outside our small matrix.We can predict which one the users 7 -10 likes better. We will map them into concept space first. so we use the users' rating matrix multiply with the jokes-to-concept similiarities matrix and find the following results. 
+```{r}
+# set user7_10, find the strength of concept.
+u7_10 <- Jester5k@data[7:10,1:5]
+u7_10 <- as.matrix(u7_10)
+
+u7_10 %*% v
+```
+From the matrix, we predict that u238 related concept of joke 4, u5809 related concept of joke 1, u16636 related concept of joke 1, and u12843 related concept of joke 1. 
+In this case, we find that from user 7 - 10, even though they have zero ratings in common, majority of them related to joke 1. It means that they may all share the similar taste of jokes. So when we do the recommendations, we can recommend the jokes that related to or similar to joke 1 for those users. 
+
+Now, let's find the similarities of jokes.
+
+```{r}
+similarity_items <- similarity(Jester5k[ ,1:20], method = "cosine", which = "items")
+as.matrix(similarity_items)
+image(as.matrix(similarity_items),main="cosine for Item similarity")
+```
+
+
+From joke 1 to joke 20, the high similarities to joke 1 are j3(0.39),j2(0.38),j10(0.36),j11(0.34). So, when we build the recommender system, we can send out these 4 jokes for users who like joke 1 better. 
+
+SVD, as my own opinion, is more reliable than others that we learned and it makes sense to me for the rating system. However, as a lot of people mentioned, it could be very expensive to compute, also need a lot of time to analyze the result.
+
+
+Let's try it for the first 100 users and first 100 jokes. I will do 60% of them as my traing set and another 25% as my tesing set.
+
+```{r}
+u100 <- Jester5k@data[1:100,1:100]
+set.seed(1)
+n <- nrow(u100)
+shuffled_df <- u100[sample(n), ]
+train_indices <- 1: round(0.6*n)
+train <- shuffled_df[train_indices, ]
+test_indices <- (round(0.6*n)+1):n
+test <- shuffled_df[test_indices, ]
+train <- as.matrix(train)
+test <- as.matrix(test)
+s <- svd(train)
+D <- diag(s$d)
+#s$u
+#D
+v <- s$v
+
+max_position <- as.vector(max.col(test %*% v))
+max_position
+table(max_position)
+
+similarity_items <- similarity(Jester5k[ ,1:100], method = "cosine", which = "items")
+similarity_items<- as.matrix(similarity_items)
+image(as.matrix(similarity_items),main="cosine for Item similarity")
+max_position_joke <- max.col(similarity_items)
+max_position_joke[1]
+max_position_joke[2]
+```
+From here, we find that many of the 40 people in the test group are interested in joke 2 and we also find that joke 25 is the most similar to joke 2. We can recommend jok2 25 for those users who are interested in joke 2. The second popular joke is joke 1, and we find the similiar joke to joke 1 is joke 3, so we can recommend joke 3 for the users who like joke 1. 
+
