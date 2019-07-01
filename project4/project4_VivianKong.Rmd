@@ -1,0 +1,196 @@
+---
+title: "Project 4"
+author: "Vivian Kong"
+date: "6/27/2019"
+output: html_document
+---
+Project 4 
+
+```{r,message=FALSE}
+library("recommenderlab")
+library("ggplot2")
+data(MovieLense)
+ratings_movies <- MovieLense[rowCounts(MovieLense)>100,colCounts(MovieLense)>50]
+ratings_movies
+# we find users who rate more than 50 movies, and the movies that be rated more than 100 times. In this case we are able to reduce the number of "NA"
+```
+
+Splitting the data into Training and Tesing sets. I am following the example in the textbook and make the percentage_training into 70%.
+
+```{r}
+percentage_training <- 0.7
+```
+
+For the test set, we want users has ratings so that we need to find what is the minimum number of movies that users rate and set the parameter is lower than it. 
+
+```{r}
+min(rowCounts(ratings_movies))
+items_to_keep <- 50
+# above 3 is good ratings, below 3 is bad ratings.
+rating_threshold <- 3
+# times to run the evaluation
+n_eval <- 1
+evaluation_set <- evaluationScheme(data=ratings_movies,method = "split", train = percentage_training, given = items_to_keep, goodRating = rating_threshold, k = n_eval)
+evaluation_set
+```
+
+Constructing training set.
+
+```{r}
+getData(evaluation_set,"train")
+nrow(getData(evaluation_set,"train")) / nrow(ratings_movies)
+# it is about 70% for our training set.
+nrow(getData(evaluation_set,"known")) / nrow(ratings_movies)
+```
+
+Evaluate the ratings in order to recommend the movies to new users. To find k value for k fold, I googled online, and most people's opinion on k value would be 5 -10. So, in my case, I would like to try k=10 to have 10 fold. 
+
+```{r}
+# k-fold is the most accurate approach. 
+n_fold <- 10
+evaluation_ratingSet <- evaluationScheme(data = ratings_movies, method = "cross-validation", k = n_fold, given = items_to_keep,goodRating = rating_threshold)
+evaluation_ratingSet
+
+# Item-based-collaborative filtering, default parameter is "Null", "IBCF recommend new items and predict their ratings."
+
+model_to_evaluate <- "IBCF"
+model_parameters <- NULL
+eval_recommender <- Recommender(data=getData(evaluation_set,"train"),method = model_to_evaluate, parameter= model_parameters)
+items_to_recommend <- 5
+
+eval_prediction <- predict(object = eval_recommender, newdata = getData(evaluation_set,"known"),n=items_to_recommend,type="ratings")
+
+qplot(rowCounts(eval_prediction)) +
+  geom_histogram(binwidth = 30) +
+  ggtitle("Distribution of movies per user")
+```
+
+
+The number of movies per users is between 300 and 500. The peak is around 400. 
+
+
+we will measure the accuracy and computer RMSE, MSE, and MAE. According to the textbook, RMSE: the standard deviation of the difference between the real and predicted ratings.
+MSE: Mean of the squared difference between the real and predicted ratings. (Contains the same information as RMSE)
+MAR: Mean of the absolute difference between the real and predicted ratings. 
+
+```{r}
+eval_accuracy <- calcPredictionAccuracy( x = eval_prediction, data = getData(evaluation_set, "unknown"),byUser = TRUE)
+head(eval_accuracy)
+qplot(eval_accuracy[,"RMSE"])+
+  geom_histogram(binwidth = 0.2)+
+  ggtitle("Distribution of the RMSE by user")
+```
+
+The range for RMSE is from 1.0 to 2.0. The peak is around 1.2. 
+
+Evaluating the recommendations. Comparing the recommendations with the items having a postive ratings. we have difined that rating which is below 3 is negative rating, above 3 is positive ragting. 
+
+```{r}
+results <- evaluate(x = evaluation_set,method = model_to_evaluate, n = seq(10,50,10))
+head(getConfusionMatrix(results)[[1]])
+```
+
+TP: recommended items that have been purchased.
+FP: recommended items that haven't been purchased.
+FN: not recommended items that have been purchased.
+TN: not recommended items that haven't been purchased. 
+A perfect model would have only TP and TN.
+
+ROC curve with true positive rate and false positive rate.
+true positive rate: percentage of purchased items that have been recommended. TP rate = TP/ (TP+FN).
+false postitive rate: percentage of not purchase items that have been recommened. FP rate = FP / (FP+TN)
+
+```{r}
+plot(results, annotate = TRUE, main = "ROC curve")
+```
+
+Precision-recall curve with the rate of precision and recall.
+
+precision: percentage of recommended items that have been purchased. precision = FP / (TP+FP)
+recall: percentage of purchased items that have been recommended, recall = TP / (TP + FN) = True positive rate. 
+
+```{r}
+plot(results,"prec/rec", annotate = TRUE, main="Precision-recall")
+```
+
+
+```{r}
+models_to_evaluate <- list(
+  IBCF_cos = list(name = "IBCF", param = list(method = "cosine")),
+  IBCF_cor = list(name = "IBCF", param= list (method = "pearson")),
+  UBCF_cos = list(name = "UBCF", param = list(method = "cosine")),
+  UBCF_cor = list(name = "UBCF", param = list(method = "pearson")),
+  random=list(name="RANDOM", param =NULL)
+)
+n_recommendations <- c (1,5, seq(10,50,10))
+list_results <- evaluate(x = evaluation_set, method = models_to_evaluate, n = n_recommendations)
+plot(list_results,annotate = 1, legend = "topleft") 
+```
+
+The highest AUC, the area under the ROC curve is from UBCF with pearson, so, in our case, UBCF_cor is the best-performing technique. 
+
+Optimizing k-value.
+
+```{r}
+vector_k <- c(5,10,20,30,40)
+models_to_evaluate <- lapply(vector_k, function(k){
+  list(name="IBCF",param = list(method = "cosine",k = k))
+})
+names(models_to_evaluate) <- paste0("IBCF_K_", vector_k)
+n_recommendations <- c (1,5, seq(10,50,10))
+list_results <- evaluate(x = evaluation_set, method = models_to_evaluate, n = n_recommendations)
+plot(list_results,annotate = 1, legend = "topleft") 
+plot(list_results,"prec/rec",annotate = 1, legend="bottomright")
+```
+
+The k having the biggest AUC is 40, the second one is 30. and if we want to fine the precision, we set k =20.
+
+Now, I run the SVD, SVDF, and ALS algorithms for the recommender system. 
+
+```{r}
+# Create the recommender based on SVD, SVDF, and ALS using the training data
+r.svd <- Recommender(getData(evaluation_set, "train"),"SVD")
+r.svdf <- Recommender(getData(evaluation_set, "train"),"SVDF")
+r.als <- Recommender(getData(evaluation_set, "train"),"ALS")
+
+#Compute predicted ratings for the test data.
+p.svd <- predict(r.svd, getData(evaluation_set,"known"),type="ratings")
+p.svdf <- predict(r.svdf,getData(evaluation_set,"known"),type="ratings")
+p.als <- predict(r.als, getData(evaluation_set,"known"),type="ratings")
+
+error <- rbind(svd = calcPredictionAccuracy(p.svd,getData(evaluation_set, "unknown")),
+               svdf = calcPredictionAccuracy(p.svdf,getData(evaluation_set,"unknown")),
+               als = calcPredictionAccuracy(p.als, getData(evaluation_set,"unknown")))
+error
+```
+
+From this error matrix, we find that svdf has the smallest RMSE and MAE. 
+
+```{r,message=FALSE}
+models_to_evaluate <- list(
+  svd = list(name = "svd", param = list(method = "SVD",type="topNList")),
+  svdf = list(name = "svdf", param= list (method = "SVDF",type="topNList")),
+  als = list(name = "als", param = list(method = "ALS",type="topNList"))
+)
+
+n_recommendations <- c (1,5, seq(10,50,10))
+list_results <- evaluate(x = evaluation_set, method = models_to_evaluate, n = n_recommendations)
+plot(list_results,annotate = 1, legend = "topleft") 
+
+
+vector_k <- c(5,10,20,30,40)
+models_to_evaluate <- lapply(vector_k, function(k){
+  list(name="SVD",param = list(method = "SVD",k = k,type="topNList"))
+})
+names(models_to_evaluate) <- paste0("SVD_K_", vector_k)
+n_recommendations <- c (1,5, seq(10,50,10))
+list_results <- evaluate(x = evaluation_set, method = models_to_evaluate, n = n_recommendations)
+plot(list_results,annotate = 1, legend = "topleft") 
+plot(list_results,"prec/rec",annotate = 1, legend="bottomright")
+
+```
+
+However, I find the SVD has the highest AOC. For K value of the , k=10 and k=5 are pretty close but k=10 is slightly higher. so choosing k for AOC maybe a good choice. and For prec/rec, k=10 still better option.
+
+Recommender systems can be evaluated offline or online. I googled online, and find this article,http://ceur-ws.org/Vol-1609/16090642.pdf. In the article, it mentioned that the method called A/B testing where a part of users are served by recommender system A and the another part of users by recommender system B. Online evaluation can reduce the tramsaction costs of finding and selecting items online. Collaborative filtering technique is still the most well-known and the most commonly implemented. For svd, as what we did the comparison between SVD and Collaborative filtering in this project, I think SVD could be very time consuming especially when we deal with the massive data online. 
+
