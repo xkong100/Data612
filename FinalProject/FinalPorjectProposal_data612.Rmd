@@ -1,0 +1,12 @@
+---
+title: "Final Project Proposal Data 612"
+author: "Vivian Kong"
+date: "7/8/2019"
+output: html_document
+---
+
+Final Project Proposal
+
+I found 3 topics that I am interested with: books, Dating ratings, and food. I went to Kaggle and I found a pretty complete data set for good books. Here is the link https://github.com/zygmuntz/goodbooks-10k
+The data set contains book_tags.csv, books.csv, ratings.csv, tags.csv, and to_read.csv. I am gonna mainly use the books.csv and ratings.csv for my final project. In my project, I would like to build a recommender system by using Principal component analysis, User-based collaborative filtering, Item-based collaborating filtering, SVD and ALS(Sparklyr) to build recommender system. Also, at the end, I would like to compare models by evaluating them and optimize a num,eric parameter to find the most suitable models. 
+
