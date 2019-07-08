@@ -1,0 +1,52 @@
+---
+title: "Project 5 Data 612"
+author: "Vivian Kong"
+date: "7/2/2019"
+output: html_document
+---
+This projecdt requires that use Spark to do the comparison. The first obstacle I encountered was installing the version that satisfy the "Sparklyr" for r. I am gonna use MovieLense to do the comparison. As I did more research about the sparklyr, I found out that sparklyr can use ALS for the recommender system. 
+```{r,message=FALSE}
+library(sparklyr)
+library(recommenderlab)
+library(dplyr)
+# Connect with spark
+sc <- spark_connect(master = "local")
+data(MovieLense, package = "recommenderlab")
+
+movielense <- MovieLense
+movies <- as(movielense,"data.frame")
+head(movies)
+movies <- transform(movies, itemid=as.numeric(factor(item)))
+colnames(movies) <- c("user","item","rating","itemid")
+# convert user and itemid to numeric in order to use for Spark
+movies$user <- as.numeric(movies$user)
+movies$itemid <- as.numeric(movies$itemid)
+movies <- movies %>% select(-item)
+head(movies)
+movies_wide <- reshape(movies, idvar = "user", timevar = "itemid", direction = "wide") %>% 
+    arrange(user)
+rownames(movies_wide) <- movies_wide$user
+movies_wide <- movies_wide %>% select(-user)
+
+# copy table to Spark
+
+sp_movies <- sdf_copy_to(sc,movies,"spmovies",overwrite = TRUE)
+partitions <- sp_movies %>% sdf_random_split(training = 0.7, test = 0.3)
+sp_movies_training <- partitions$training
+sp_movies_test <- partitions$test
+head(sp_movies_training)
+
+model<- ml_als(sp_movies_training,rating_col = "rating",user_col = "user", item_col = "itemid",rank = 10)
+predictions <- ml_predict(model, sp_movies_test)
+
+predictions <- data.frame(predictions)
+predictions$difference <- (predictions$rating - predictions$prediction)
+predictions$difference_square <- (predictions$difference)^2
+
+head(predictions)
+sqrt(mean(predictions$difference_square,na.rm = TRUE))
+
+```
+
+Conclusion: Working with spark is a great experience although I still have to use "recommenderlab" for more experiments for the recommender system. There is some inconvenient parts of Sparklyr. when loading the packages, it may take a little while to run the program but it calculate the prediciton by ALS is very fast. On the Contrary, "recommenderlab" takes little time to run the program but it calculates ALS for a littlbe bit longer time. Comparing the accuracy, Spark RMSE = 0.92, which is pretty good and better the RMSE in Collaborative Filtering in my Project 4 which is around 1.2. I think overall, Spark is a pretty good experience. Combining the accuracy,the time consuming and the size of the data set, Spark may be a good idea to start with. 
+
