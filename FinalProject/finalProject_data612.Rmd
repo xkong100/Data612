@@ -1,0 +1,171 @@
+---
+title: "Final Project"
+author: "Vivian Kong"
+date: "6/28/2019"
+output: html_document
+---
+In my final project, I am trying to build a recommender system for the good books. I only took the books csv file and ratings csv file for this project. There are 10000 books and 53424 users in the file. 
+
+The first obstacle I encountered is the file is really large. The rating csv file itself is about 69MB. This is the first time I dealt with a relatively big file. When I read csv file in R, it takes a very long time and also not loading. So, to make R running in a time fashion, I only loaded first 10,000 rows in "rating.csv". In this case, it efficiently reduced the running time. 
+
+
+```{r,message=FALSE}
+library(recommenderlab)
+library(dplyr)
+library(reshape2)
+library(ggplot2)
+
+books <- read.csv("/Users/xiaomengkong/Desktop/SPS/Data612/Final Project/books.csv")
+ratings <- read.csv("/Users/xiaomengkong/Desktop/SPS/Data612/Final Project/ratings.csv",nrows = 10000)
+
+books <- data.frame(books)
+ratings <- data.frame(ratings)
+```
+
+
+Part 1. Preparing data for "recommenderlab" and "sparklyr"
+
+For "sparklyr", I combined the books.csv and ratings.csv into 1 data frame by use the same "book_id. The reason why I am choosing data frame because later I would like to use Sparklyr to run ALS algorithm to do the prediction. 
+After I combined them, I chose the columns that I need for the rating matrix or data frame. So I chose the columns of "book_id", "authors", "title", "user_id", and "rating" for my new dataframe. The reason why I keep these columns because when I do the prediction by using Sparklyr, I would like to see which book the system recommend instead of just the book-id which I did not know which book the system recommend. I called the new data frame is "NewRating" which I will use it later.
+
+```{r}
+books_new <- books %>% select(1,8,11)
+
+NewRatings <- merge(books_new,ratings,by ="book_id")
+
+head(NewRatings)
+```
+
+
+Now I am gonna prepare the wide form for my ratings matrix for "recommenderlab". In here, I just use the ratings.csv with first 10000 rows since in this case, I don't really need to know the book name for the prediction. In order to use the package of "recommenderlab", I have to convert the matrix into "realRatingMatrix". 
+
+```{r}
+# Change ratings into wide form
+
+head(ratings)
+
+ratings$book_id <- as.numeric(ratings$book_id)
+ratings$user_id <- as.numeric(ratings$user_id)
+
+ratings_wide <- reshape(ratings, idvar="user_id",timevar = "book_id", direction = "wide") %>% arrange(user_id)
+
+colnames(ratings_wide)[colnames(ratings_wide)=="user_id"] <-"rating.user"
+names(ratings_wide) <- substring(names(ratings_wide),8)
+
+ratings_wide_2 <- ratings_wide[,-1]
+rownames(ratings_wide_2) <- ratings_wide[,1]
+
+
+
+
+
+head(ratings_wide_2[,1:5])
+
+ratings_matrix_wide <- as.matrix(ratings_wide_2)
+head(ratings_matrix_wide[,1:5])
+ratings_matrix_wide[is.na(ratings_matrix_wide)] <- 0
+ratings_matrix <- as(ratings_matrix_wide, "realRatingMatrix")
+head(ratings_matrix)
+```
+
+Part 2. Split the data into training and testing set. I set 70% of data values into training set, and the rest 30% into testing set. Here, I also set that any rating is above 3 which are good ratings, and below 3 is bad ratings.
+
+```{r}
+percentage_training <- 0.7
+items_to_keep <- 100
+# above 3 is good ratings, below 3 is bad ratings.
+rating_threshold <- 3
+# times to run the evaluation
+n_eval <- 1
+evaluation_set <- evaluationScheme(data=ratings_matrix,method = "split", train = percentage_training, given = items_to_keep, goodRating = rating_threshold, k = n_eval)
+evaluation_set
+
+getData(evaluation_set,"train")
+nrow(getData(evaluation_set,"train")) / nrow(ratings_matrix)
+# it is about 70% for our training set.
+nrow(getData(evaluation_set,"known")) / nrow(ratings_matrix)
+
+# k-fold is the most accurate approach. 
+n_fold <- 5
+evaluation_ratingSet <- evaluationScheme(data = ratings_matrix, method = "cross-validation", k = n_fold, given = items_to_keep,goodRating = rating_threshold)
+evaluation_ratingSet
+
+# Item-based-collaborative filtering, default parameter is "Null", "IBCF recommend new items and predict their ratings."
+
+model_to_evaluate <- "IBCF"
+model_parameters <- NULL
+eval_recommender <- Recommender(data=getData(evaluation_set,"train"),method = model_to_evaluate, parameter= model_parameters)
+items_to_recommend <- 5
+
+eval_prediction <- predict(object = eval_recommender, newdata = getData(evaluation_set,"known"),n=items_to_recommend,type="ratings")
+head(eval_prediction)
+qplot(rowCounts(eval_prediction)) +
+  geom_histogram(binwidth = 30) +
+  ggtitle("Distribution of books per user")
+```
+
+From the distribution, I find a decent amount of "0" for the distribution of books per user since there are a lot of NA. Regardless of this, it looks like bimodal for the distribution, one peak point is around 1250 and another peak point is around 1800. 
+
+```{r}
+eval_accuracy <- calcPredictionAccuracy( x = eval_prediction, data = getData(evaluation_set, "unknown"),byUser = TRUE)
+head(eval_accuracy)
+qplot(eval_accuracy[,"RMSE"])+
+  geom_histogram(binwidth = 0.2)+
+  ggtitle("Distribution of the RMSE by user")
+```
+
+The RMSE by user from the distribution is about 0.6 which is a relatively small RMSE. I'll consider it a pretty good prediction. 
+
+
+
+```{r}
+
+results <- evaluate(x = evaluation_set,method = model_to_evaluate, n = seq(10,50,10))
+head(getConfusionMatrix(results)[[1]])
+
+plot(results, annotate = TRUE, main = "ROC curve")
+
+plot(results,"prec/rec", annotate = TRUE, main="Precision-recall")
+
+models_to_evaluate <- list(
+  IBCF_cos = list(name = "IBCF", param = list(method = "cosine")),
+  IBCF_cor = list(name = "IBCF", param= list (method = "pearson")),
+  UBCF_cos = list(name = "UBCF", param = list(method = "cosine")),
+  UBCF_cor = list(name = "UBCF", param = list(method = "pearson")),
+  random=list(name="RANDOM", param =NULL)
+)
+n_recommendations <- c (1,5, seq(10,50,10))
+list_results <- evaluate(x = evaluation_set, method = models_to_evaluate, n = n_recommendations)
+plot(list_results,annotate = 1, legend = "topleft",main="ROC Curve")
+  
+plot(list_results,"prec/rec", annotate = 1, legend = "bottomright", main = "Precision-recall")
+```
+
+The good performance index is the area under the AUC curve. In our graph, the highest is UBCF with cosine distance, so it is the best-perfoming technique that we can use. For the Precision-recall graph, UBCF with cosine distance is still the top model. 
+
+
+Part 3. Calculate ALS with Sparkly
+To compare the result, I split into 70% training set and 30% testing set. Since I would like to see the prediction of the rating, so I used the data set of "NewRatings" which is dataframe. I found that the predictions seem pretty close, and the RMSE of this model is 1.23. Comparing with the UBCF with cosine distance, UBCF with cosine distance is still the best technique. 
+```{r}
+library(sparklyr)
+
+sc <- spark_connect(master = "local")
+sp_books <- sdf_copy_to(sc,NewRatings,"spbooks",overwrite = TRUE)
+partitions <- sp_books %>% sdf_random_split(training = 0.7, test = 0.3)
+sp_books_training <- partitions$training
+sp_books_test <- partitions$test
+head(sp_books_training)
+
+model<- ml_als(sp_books_training,rating_col = "rating",user_col = "user_id", item_col = "book_id",rank = 10)
+predictions <- ml_predict(model, sp_books_test)
+
+predictions <- data.frame(predictions)
+predictions$difference <- (predictions$rating - predictions$prediction)
+predictions$difference_square <- (predictions$difference)^2
+
+head(predictions)
+sqrt(mean(predictions$difference_square,na.rm = TRUE))
+
+```
+
+Conclusion: Throughout this summer semester, I think this is a very interesting topic to learn since we live with it all the time whether we like the recommender system or not. Overall, I think the recommender system is convinient for our lives although the developer has to aware of the ethical issues may get involved. I think I learn a lot from this semester, especially when it uses linear algebra to do the recommendations. I find it fancinating. Summer class is pretty short but I would like to explore more about this topic after the class. 
